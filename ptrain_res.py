@@ -25,14 +25,8 @@ from efficientnet_pytorch import model as enet
 import albumentations as albu
 from apex import amp
 import warnings
-
 warnings.filterwarnings('ignore', category=UserWarning) 
-
-LOGPRINT = True
-
-def log(s):
-    if LOGPRINT:
-        print(s)
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 def epoch_time(start_time, end_time):
     elapsed_time = end_time - start_time
@@ -40,36 +34,34 @@ def epoch_time(start_time, end_time):
     elapsed_secs = int(elapsed_time - (elapsed_mins * 60))
     return elapsed_mins, elapsed_secs
 
-log("hello world for plant training")
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+# DEVICE = torch.device('cuda')
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-log(f"device:{DEVICE}")
 
-VER = 'v0.2'
+
+VER = 'v1'
 DEBUG = False
 PARAMS = {
     'version': VER,
-    'folds': 3,
+    'folds': 6,
     'folds_train': None,
-    'img_size': 300, #224=B0 240=B1 260=B2 300=B3 380=B4 456=B5 528=B6 600=B7
-    'batch_size': 64,
+    'img_size': 240, #224=B0 240=B1 260=B2 300=B3 380=B4 456=B5 528=B6 600=B7
+    'batch_size': 16,
     'workers': 8,
-    'epochs': 2 if DEBUG else 20,
+    'epochs': 2 if DEBUG else 40,
     'warmup': False,
     'dropout': .4,
-    'backbone': 'efficientnet-b3', # 'efficientnet-bX' or 'resnext'
-    'seed': 20221126,
+    'backbone': 'resnext', # 'efficientnet-bX' or 'resnext'
+    'seed': 20221128,
     'aughard': True,
-    'lr': .0005,
+    'lr': .001,
     'average': 'macro', # 'micro', 'macro' or 'samples'
-    'apex': True # ,
-    # 'comments': 'f1 score'
+    'apex': False,
+    'comments': 'f1 score'
 }
-
 DATA_PATH = '../../dataset'
 IMGS_PATH = f'{DATA_PATH}/train_images/'
-MDLS_PATH = f'./models_{VER}'
+MDLS_PATH = f'./res_models_{VER}'
 if not os.path.exists(MDLS_PATH):
     os.mkdir(MDLS_PATH)
 
@@ -77,26 +69,21 @@ def seed_all(seed):
     random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
     np.random.seed(seed)
-    torch.manual_seed(seed)
 
 seed_all(PARAMS['seed'])
 
-start_time = time.time()
 
 if DEBUG:
     df_train = pd.read_csv(f'{DATA_PATH}/train.csv').sample(100).reset_index(drop=True)
 else:
     df_train = pd.read_csv(f'{DATA_PATH}/train.csv')
 df_sub = pd.read_csv(f'{DATA_PATH}/sample_submission.csv')
-# display(df_train.head())
+# display(df_train.head(10))
 # display(df_train.labels.value_counts())
 labels = []
 for lbl in list(set(df_train.labels)):
     labels.extend(lbl.split())
 labels = list(set(labels))
-
-log(f"labels:{labels}")
-
 LABELS = {i: x for i, x in enumerate(sorted(labels))}
 LABELS_ = {x: i for i, x in enumerate(sorted(labels))}
 PARAMS['labels'] = LABELS
@@ -106,26 +93,27 @@ with open(f'{MDLS_PATH}/params.json', 'w') as file:
 del file;
 print('labels:', LABELS)
 print('labels_:', LABELS_)
-
+    
 
 skf = StratifiedKFold(PARAMS['folds'], shuffle=True, random_state=PARAMS['seed'])
 df_train['fold'] = -1
 for i, (train_idx, valid_idx) in enumerate(skf.split(df_train, df_train['labels'])):
     df_train.loc[valid_idx, 'fold'] = i
-# display(df_train.head())
-
+# display(df_train.head(20))
+    
 df_occurence = pd.DataFrame({
     'origin': df_train.labels.value_counts(normalize=True),
     'fold_0': df_train[df_train.fold == 0].labels.value_counts(normalize=True),
     'fold_1': df_train[df_train.fold == 1].labels.value_counts(normalize=True),
     'fold_2': df_train[df_train.fold == 2].labels.value_counts(normalize=True),
     'fold_3': df_train[df_train.fold == 3].labels.value_counts(normalize=True),
-    'fold_4': df_train[df_train.fold == 4].labels.value_counts(normalize=True)})
-df_occurence.plot.barh(figsize=[12, 6], colormap='plasma')
-plt.show()
+    'fold_4': df_train[df_train.fold == 4].labels.value_counts(normalize=True),
+    'fold_5': df_train[df_train.fold == 5].labels.value_counts(normalize=True)
+    })
+df_occurence.plot.barh(figsize=[24, 16], colormap='plasma')
+plt.savefig("./res_images/occurence.png")
 
 
-#!g1.1
 if PARAMS['aughard']:
     aug = albu.Compose([
         albu.OneOf([
@@ -145,6 +133,7 @@ if PARAMS['aughard']:
         albu.HorizontalFlip(p=.5),
         albu.VerticalFlip(p=.5),
         albu.Transpose(p=.5),
+        # cutmix #TODO: Haoxuan 
         albu.Cutout(
             num_holes=10, 
             max_h_size=int(.1 * PARAMS['img_size']), 
@@ -164,8 +153,6 @@ else:
         albu.VerticalFlip(p=.25)
     ])
 
-
-#!g1.1
 def flip(img, axis=0):
     if axis == 1:
         return img[::-1, :, ]
@@ -188,7 +175,6 @@ class PlantDataset(data.Dataset):
     def __len__(self):
         return self.df.shape[0]
     
-      
     def __getitem__(self, index):
         row = self.df.iloc[index]
         img_name = row.image
@@ -210,9 +196,7 @@ class PlantDataset(data.Dataset):
         else:
             img = flip(img, axis=self.tta)
             img = img.transpose(2, 0, 1)
-            return torch.tensor(img.copy())
-
-
+            return torch.tens
 dataset_show = PlantDataset(
     df=df_train,
     size=PARAMS['img_size'],
@@ -224,9 +208,8 @@ img_test = img_test.numpy().transpose([1, 2, 0])
 img_test = np.clip(img_test, 0, 1)
 plt.imshow(img_test)
 plt.title(lbl_test)
-plt.show()
+plt.savefig("./res_images/7th.png")
 
-#!g1.1
 class EffNet(nn.Module):
     
     def __init__(self, params, out_dim):
@@ -245,10 +228,10 @@ class EffNet(nn.Module):
         return self.enet(x)
     
     def forward(self, x):
-        x = self.enet(x)
+        x = self.extract(x)
         x = self.myfc(x)
         return x
-
+    
 class ResNext(nn.Module):
     
     def __init__(self, params, out_dim):
@@ -267,12 +250,9 @@ class ResNext(nn.Module):
     def forward(self, x):
         x = self.rsnxt(x)
         return x
-    
-
-#!g1.1
 criterion = nn.BCEWithLogitsLoss()
 
-def train_epoch(loader, optimizer):
+def train_epoch(model, loader, optimizer):
     model.train()
     train_loss = []
     bar = tqdm(loader, desc='ep')
@@ -294,8 +274,7 @@ def train_epoch(loader, optimizer):
         bar.set_description('loss: {:.4f}, smth: {:.4f}'.format(loss_np, smooth_loss))
     return train_loss
 
-
-def val_epoch(loader, get_output=False, verbose=False):
+def val_epoch(model, loader, get_output=False, verbose=False):
     model.eval()
     val_loss = []
     val_logits = []
@@ -311,7 +290,7 @@ def val_epoch(loader, get_output=False, verbose=False):
             val_preds.append(pred)
             val_targets.append(target)
             val_loss.append(loss.detach().cpu().numpy())
-    val_loss = np.mean(val_loss)
+        val_loss = np.mean(val_loss)
     val_logits = torch.cat(val_logits).cpu().numpy()
     val_preds = torch.cat(val_preds).cpu().numpy()
     val_targets = torch.cat(val_targets).cpu().numpy()
@@ -325,118 +304,147 @@ def val_epoch(loader, get_output=False, verbose=False):
         return val_loss, val_acc, val_f1
 
 
+# here we divide the whole dataset into six pieces, 
+# four as training set, one as validation set, and the last one as test set
 pred, target = [], []
 preds_val, target_val = [], []
 
-if DEBUG:
-    n_folds_train = 2
+# if DEBUG:
+#     n_folds_train = 2
+# else:
+#     n_folds_train = PARAMS['folds'] if not PARAMS['folds_train'] else PARAMS['folds_train']
+# start_folds_train = 0
+
+# for fold_num in range(start_folds_train, n_folds_train):
+print('=' * 20, "begin to training",  '=' * 20)
+# print((df_train['fold'] != 4 and df_train['fold'] != 5))
+train_idxs = np.where((df_train['fold'] != 4) & (df_train['fold'] != 5))[0]
+val_idxs = np.where((df_train['fold'] == 4))[0]
+test_idxs = np.where((df_train['fold'] == 5))[0]
+
+df_fold  = df_train.loc[train_idxs]
+df_val = df_train.loc[val_idxs]
+df_test = df_train.loc[test_idxs]
+
+dataset_train = PlantDataset(
+    df=df_fold,
+    size=PARAMS['img_size'],
+    labels=LABELS_,
+    transform=aug
+)
+dataset_val = PlantDataset(
+    df=df_val,
+    size=PARAMS['img_size'],
+    labels=LABELS_,
+    transform=None
+)
+dataset_test = PlantDataset(
+    df=df_test,
+    size=PARAMS['img_size'],
+    labels=LABELS_,
+    transform=None
+)
+
+train_loader = torch.utils.data.DataLoader(
+    dataset_train, 
+    batch_size=PARAMS['batch_size'], 
+    sampler=RandomSampler(dataset_train), 
+    num_workers=PARAMS['workers']
+)
+val_loader = torch.utils.data.DataLoader(
+    dataset_val, 
+    batch_size=PARAMS['batch_size'], 
+    sampler=SequentialSampler(dataset_val), 
+    num_workers=PARAMS['workers']
+)
+test_loader = torch.utils.data.DataLoader(
+    dataset_test, 
+    batch_size=PARAMS['batch_size'], 
+    sampler=SequentialSampler(dataset_test), 
+    num_workers=PARAMS['workers']
+)
+
+if PARAMS['backbone'] == 'resnext':
+    model = ResNext(params=PARAMS, out_dim=len(LABELS_)) 
 else:
-    n_folds_train = PARAMS['folds'] if not PARAMS['folds_train'] else PARAMS['folds_train']
-start_folds_train = 0
+    model = EffNet(params=PARAMS, out_dim=len(LABELS_)) 
+model = model.to(DEVICE)
 
-log(f"n_folds_train:{n_folds_train}")
+optimizer = optim.Adam(model.parameters(), lr=PARAMS['lr'])
 
-for fold_num in range(start_folds_train, n_folds_train):
-    print('=' * 20, 'FOLD:', fold_num, '=' * 20)
-    train_idxs = np.where((df_train['fold'] != fold_num))[0]
-    val_idxs = np.where((df_train['fold'] == fold_num))[0]
-    df_fold  = df_train.loc[train_idxs]
-    df_val = df_train.loc[val_idxs]
-    dataset_train = PlantDataset(
-        df=df_fold,
-        size=PARAMS['img_size'],
-        labels=LABELS_,
-        transform=aug
+if PARAMS['apex']:
+    model, optimizer = amp.initialize(model, optimizer, opt_level='O1')
+if PARAMS['warmup']:
+    scheduler = torch.optim.lr_scheduler.OneCycleLR(
+        optimizer, 
+        max_lr=PARAMS['lr'], 
+        total_steps=PARAMS['epochs'],
+        div_factor=(PARAMS['lr'] / 1e-5), 
+        final_div_factor=1000,
+        pct_start=(int(.1 * PARAMS['epochs']) / PARAMS['epochs']),
     )
-    dataset_val = PlantDataset(
-        df=df_val,
-        size=PARAMS['img_size'],
-        labels=LABELS_,
-        transform=None
-    )
-    train_loader = torch.utils.data.DataLoader(
-        dataset_train, 
-        batch_size=PARAMS['batch_size'], 
-        sampler=RandomSampler(dataset_train), 
-        num_workers=PARAMS['workers']
-    )
-    val_loader = torch.utils.data.DataLoader(
-        dataset_val, 
-        batch_size=PARAMS['batch_size'], 
-        sampler=SequentialSampler(dataset_val), 
-        num_workers=PARAMS['workers']
-    )
-    if PARAMS['backbone'] == 'resnext':
-        model = ResNext(params=PARAMS, out_dim=len(LABELS_)) 
-    else:
-        model = EffNet(params=PARAMS, out_dim=len(LABELS_)) 
-    model = model.to(DEVICE)
-    optimizer = optim.Adam(model.parameters(), lr=PARAMS['lr'])
-    if PARAMS['apex']:
-        model, optimizer = amp.initialize(model, optimizer, opt_level='O1')
-    if PARAMS['warmup']:
-        scheduler = torch.optim.lr_scheduler.OneCycleLR(
-            optimizer, 
-            max_lr=PARAMS['lr'], 
-            total_steps=PARAMS['epochs'],
-            div_factor=(PARAMS['lr'] / 1e-5), 
-            final_div_factor=1000,
-            pct_start=(int(.1 * PARAMS['epochs']) / PARAMS['epochs']),
-        )
-    else:
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, PARAMS['epochs'])
-    print('train len:', len(dataset_train),'| val len:', len(dataset_val))
-    best_file = '{}/model_best_{}.pth'.format(MDLS_PATH, fold_num)
-    acc_max = 0
-    f1_max = 0
-    for epoch in tqdm(range(PARAMS['epochs']), desc='epochs'):
-        print(time.ctime(), 'epoch:', epoch)
-        train_loss = train_epoch(train_loader, optimizer)
-        val_loss, acc, f1 = val_epoch(val_loader)
-        scheduler.step(epoch)
-        content = '{} epoch {}, lr: {:.8f}, train loss: {:.4f}, val loss: {:.4f}, acc: {:.2f}, val f1: {:.4f}'.format(
-            time.ctime(),
-            epoch, 
-            optimizer.param_groups[0]['lr'], 
-            np.mean(train_loss),
-            np.mean(val_loss),
-            acc,
-            f1
-        )
-        print(content)
-        with open('{}/log_{}.txt'.format(MDLS_PATH, fold_num), 'a') as appender:
-            appender.write(content + '\n')
-        if f1 > f1_max:
-            torch.save(model.state_dict(), best_file)
-            print('f1 improved {:.2f} --> {:.2f} model saved'.format(f1_max, f1))
-            f1_max = f1
-            preds_best, target_best = [], []
-            with torch.no_grad():
-                for img_data, img_lbls in tqdm(val_loader):
-                    img_data = img_data.to(DEVICE)
-                    preds = np.squeeze(model(img_data).sigmoid().cpu().numpy())
-                    preds_best.extend(preds)
-                    target_best.extend(img_lbls.cpu().numpy())
-            print('val preds done:', len(preds_best), len(target_best))
-    preds_val.extend(preds_best)
-    target_val.extend(target_best)
-    with open('log_total.txt', 'a') as appender:
-        appender.write('{} | fold: {} | max f1: {:.2f}\n'.format(PARAMS, fold_num, f1_max))
-    torch.save(
-        model.state_dict(), 
-        os.path.join('{}/model_final_{}.pth'.format(MDLS_PATH, fold_num))
-    )
-    del model, dataset_train, dataset_val, train_loader, val_loader
-    torch.cuda.empty_cache()
-    gc.collect()
+else:
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, PARAMS['epochs'])
 
+print('train len:', len(dataset_train),'| val len:', len(dataset_val), "| test len:", len(dataset_test))
+best_file = '{}/model_best.pth'.format(MDLS_PATH)
+acc_max = 0
+f1_max = 0
+for epoch in tqdm(range(PARAMS['epochs']), desc='epochs'):
+    # print(time.ctime(), 'epoch:', epoch)
+    start_time = time.time()
+    train_loss = train_epoch(model, train_loader, optimizer)
+    val_loss, acc, f1 = val_epoch(model, val_loader)
+    end_time = time.time()
+    train_min, train_sec = epoch_time(start_time, end_time)
+
+    scheduler.step(epoch)
+    content = '{} epoch {}, lr: {:.5f}, train loss: {:.4f}, val loss: {:.4f}, val acc: {:.2f}, val f1: {:.4f}, epoch_time:{}min{}sec'.format(
+        time.ctime(),
+        epoch, 
+        optimizer.param_groups[0]['lr'], 
+        np.mean(train_loss),
+        np.mean(val_loss),
+        acc,
+        f1,
+        train_min,
+        train_sec
+    )
+    print(content)
+
+    with open('{}/log.txt'.format(MDLS_PATH), 'a') as appender:
+        appender.write(content + '\n')
+    if f1 > f1_max:
+        torch.save(model.state_dict(), best_file)
+        print('f1 improved {:.2f} --> {:.2f} model saved'.format(f1_max, f1))
+        f1_max = f1
+        preds_best, target_best = [], []
+        with torch.no_grad():
+            for img_data, img_lbls in tqdm(val_loader):
+                img_data = img_data.to(DEVICE)
+                preds = np.squeeze(model(img_data).sigmoid().cpu().numpy())
+                preds_best.extend(preds)
+                target_best.extend(img_lbls.cpu().numpy())
+        print('val preds done:', len(preds_best), len(target_best))
+preds_val.extend(preds_best)
+target_val.extend(target_best)
+
+with open('{}/log_total.txt'.format(MDLS_PATH), 'a') as appender:
+    appender.write('{} | max f1: {:.2f}\n'.format(PARAMS, f1_max))
+torch.save(
+    model.state_dict(), 
+    os.path.join('{}/model_final.pth'.format(MDLS_PATH))
+)
+del model, dataset_train, dataset_val, train_loader, val_loader
+torch.cuda.empty_cache()
+gc.collect()
 preds_val = np.array(preds_val)
 target_val = np.array(target_val)
 
 elapsed_time = time.time() - start_time
 print(f'time elapsed: {elapsed_time // 60:.0f} min {elapsed_time % 60:.0f} sec')
 
-
+    
 th_dict = {}
 for i, lbl in LABELS.items():
     f1_max = 0
