@@ -444,6 +444,16 @@ target_val = np.array(target_val)
 elapsed_time = time.time() - start_time
 print(f'time elapsed: {elapsed_time // 60:.0f} min {elapsed_time % 60:.0f} sec')
 
+
+test_loss, acc, f1 = val_epoch(model, test_loader)
+content = 'test loss: {:.4f}, test acc: {:.2f}, test f1: {:.4f}'.format(
+        np.mean(test_loss),
+        acc,
+        f1
+    )
+with open('{}/log.txt'.format(MDLS_PATH), 'a') as appender:
+    appender.write(content + '\n')
+
     
 th_dict = {}
 for i, lbl in LABELS.items():
