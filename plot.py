@@ -2,11 +2,12 @@ import matplotlib.pyplot as plt
 import sys
 import os
 import numpy as np
-
+plt.rcParams['font.family'] = 'DeJavu Serif'
+plt.rcParams['font.serif'] = ['Times New Roman']
 
 ### result 1
-file_eff = "./eff_models_v1/log.txt"
-file_res = "./res_models_v1/log.txt"
+file_eff = "./eff_models_v3/log.txt"
+file_res = "./res_models_v3/log.txt"
 
 
 rfile_eff = open(file_eff, "r")
@@ -21,7 +22,7 @@ train_loss_res, val_loss_res, val_accu_res, val_f1_res = [], [] ,[], []
 
 
 print(f"len:{len(rlines_eff)}")
-for i in range(len(rlines_eff)):
+for i in range(len(rlines_eff) - 1):
     train_loss_eff.append(float(rlines_eff[i].split(",")[2].split(":")[1]))
     val_loss_eff.append(float(rlines_eff[i].split(",")[3].split(":")[1]))
     val_accu_eff.append(float(rlines_eff[i].split(",")[4].split(":")[1]))
@@ -38,7 +39,7 @@ for i in range(len(rlines_eff)):
 # print(loss_svm)
 x = np.arange(1,41,1)
 plt.rcParams['font.size'] = '25'
-plt.rcParams['font.family'] = 'Palatino'
+# plt.rcParams['font.family'] = 'Palatino'
 
 fig, ax = plt.subplots(figsize=(10, 6.5), dpi=500)
 
@@ -54,7 +55,7 @@ ax.set_xlim(0, 40)
 plt.legend(fontsize=20)
 plt.tight_layout()
 
-plt.savefig("./images/loss.png")
+plt.savefig("./images/loss_v3.png")
 
 ax.clear()
 
@@ -67,7 +68,7 @@ ax.set_xlim(0, 40)
 # ax.set_ylim(80, 97)
 plt.legend(fontsize=20)
 plt.tight_layout()
-plt.savefig("./images/accu.png")
+plt.savefig("./images/accu_v3.png")
 
 
 ax.clear()
@@ -82,4 +83,4 @@ ax.set_ylim(0, 1)
 plt.legend(fontsize=20)
 plt.tight_layout()
 
-plt.savefig("./images/f1score.png")
+plt.savefig("./images/f1score_v3.png")

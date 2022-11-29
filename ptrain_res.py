@@ -39,13 +39,13 @@ def epoch_time(start_time, end_time):
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-VER = 'v2'
+VER = 'v3'
 DEBUG = False
 PARAMS = {
     'version': VER,
     'folds': 6,
     'folds_train': None,
-    'img_size': 240, #224=B0 240=B1 260=B2 300=B3 380=B4 456=B5 528=B6 600=B7
+    'img_size': 300, #224=B0 240=B1 260=B2 300=B3 380=B4 456=B5 528=B6 600=B7
     'batch_size': 16,
     'workers': 8,
     'epochs': 2 if DEBUG else 40,
@@ -214,7 +214,9 @@ class EffNet(nn.Module):
     
     def __init__(self, params, out_dim):
         super(EffNet, self).__init__()
-        self.enet = enet.EfficientNet.from_name(params['backbone'])
+        # self.enet = enet.EfficientNet.from_name(params['backbone'])
+        self.enet = enet.EfficientNet.from_pretrained(params['backbone'])
+
         nc = self.enet._fc.in_features
         self.enet._fc = nn.Identity()
         self.myfc = nn.Sequential(
@@ -236,7 +238,9 @@ class ResNext(nn.Module):
     
     def __init__(self, params, out_dim):
         super(ResNext, self).__init__()
-        self.rsnxt = torchvision.models.resnext50_32x4d(pretrained=True)
+        # self.rsnxt = torchvision.models.resnext50_32x4d(pretrained=True)
+        # self.rsnxt = torchvision.models.resnext50_32x4d()
+        self.rsnxt = torchvision.models.resnet50(weights="IMAGENET1K_V1")
         nc = self.rsnxt.fc.in_features
         self.rsnxt.fc = nn.Sequential(
             nn.Flatten(),
@@ -251,6 +255,11 @@ class ResNext(nn.Module):
         x = self.rsnxt(x)
         return x
 criterion = nn.BCEWithLogitsLoss()
+
+# count the parameters
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
 
 def train_epoch(model, loader, optimizer):
     model.train()
@@ -366,9 +375,13 @@ test_loader = torch.utils.data.DataLoader(
 
 if PARAMS['backbone'] == 'resnext':
     model = ResNext(params=PARAMS, out_dim=len(LABELS_)) 
+    print(f'The resnetx50 model has {count_parameters(model):,} trainable parameters')
 else:
     model = EffNet(params=PARAMS, out_dim=len(LABELS_)) 
+    print(f'The efficient model has {count_parameters(model):,} trainable parameters')
 model = model.to(DEVICE)
+
+
 
 optimizer = optim.Adam(model.parameters(), lr=PARAMS['lr'])
 
