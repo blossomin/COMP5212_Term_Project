@@ -39,7 +39,7 @@ def epoch_time(start_time, end_time):
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-VER = 'v1'
+VER = 'v2'
 DEBUG = False
 PARAMS = {
     'version': VER,
@@ -429,6 +429,16 @@ for epoch in tqdm(range(PARAMS['epochs']), desc='epochs'):
 preds_val.extend(preds_best)
 target_val.extend(target_best)
 
+test_loss, acc, f1 = val_epoch(model, test_loader)
+content = 'test loss: {:.4f}, test acc: {:.2f}, test f1: {:.4f}'.format(
+        np.mean(test_loss),
+        acc,
+        f1
+    )
+with open('{}/log.txt'.format(MDLS_PATH), 'a') as appender:
+    appender.write(content + '\n')
+
+
 with open('{}/log_total.txt'.format(MDLS_PATH), 'a') as appender:
     appender.write('{} | max f1: {:.2f}\n'.format(PARAMS, f1_max))
 torch.save(
@@ -444,15 +454,6 @@ target_val = np.array(target_val)
 elapsed_time = time.time() - start_time
 print(f'time elapsed: {elapsed_time // 60:.0f} min {elapsed_time % 60:.0f} sec')
 
-
-test_loss, acc, f1 = val_epoch(model, test_loader)
-content = 'test loss: {:.4f}, test acc: {:.2f}, test f1: {:.4f}'.format(
-        np.mean(test_loss),
-        acc,
-        f1
-    )
-with open('{}/log.txt'.format(MDLS_PATH), 'a') as appender:
-    appender.write(content + '\n')
     
 th_dict = {}
 for i, lbl in LABELS.items():

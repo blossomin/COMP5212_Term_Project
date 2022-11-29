@@ -1,0 +1,2 @@
+Tue Nov 29 10:33:51 2022 epoch 0, lr: 0.00100, train loss: 0.4497, val loss: 0.4185, val acc: 81.93, val f1: 0.0034, epoch_time:8min1sec
+Tue Nov 29 10:42:13 2022 epoch 1, lr: 0.00100, train loss: 0.4303, val loss: 0.4810, val acc: 80.14, val f1: 0.0806, epoch_time:7min4sec
