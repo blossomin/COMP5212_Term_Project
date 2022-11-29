@@ -59,8 +59,8 @@ plt.savefig("./images/loss_v3.png")
 
 ax.clear()
 
-ax.plot(x, val_accu_eff, label="EfficientNet", lw=3)
-ax.plot(x, val_accu_res, label="ResNet", lw=3)
+ax.plot(x, val_accu_eff, label="EfficientNet_b3", lw=3)
+ax.plot(x, val_accu_res, label="ResNet50", lw=3)
 
 ax.set_xlabel("Number of Epoch", size=28)
 ax.set_ylabel("Validation Accuracy", size=28)
@@ -73,8 +73,8 @@ plt.savefig("./images/accu_v3.png")
 
 ax.clear()
 
-plt.plot(x, val_f1_eff, label="EfficientNet", lw=3)
-plt.plot(x, val_f1_res, label="ResNet", lw=3)
+plt.plot(x, val_f1_eff, label="EfficientNet_b3", lw=3)
+plt.plot(x, val_f1_res, label="ResNet50", lw=3)
 
 ax.set_xlabel("Number of Epoch", size=28)
 ax.set_ylabel("F1-Score", size=28)
