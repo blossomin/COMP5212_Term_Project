@@ -37,44 +37,49 @@ for i in range(len(rlines_eff)):
 # print(loss_log)
 # print(loss_svm)
 x = np.arange(1,41,1)
+plt.rcParams['font.size'] = '25'
+plt.rcParams['font.family'] = 'Palatino'
 
-plt.figure()
+fig, ax = plt.subplots(figsize=(10, 6.5), dpi=500)
 
-plt.plot(x, train_loss_eff, label="Eff train loss")
-plt.plot(x, val_loss_eff, label="Eff val loss")
-plt.plot(x, train_loss_res, label="Res train loss")
-plt.plot(x, val_loss_res, label="Res val loss")
+ax.plot(x, train_loss_eff, label="Eff_train_loss", lw=3)
+ax.plot(x, val_loss_eff, label="Eff_val_loss", lw=3)
+ax.plot(x, train_loss_res, label="Res_train_loss", lw=3)
+ax.plot(x, val_loss_res, label="Res_val_loss", lw=3)
 
-# plt.xticks(x)
-plt.xlabel("# epoch")
-plt.ylabel("average loss")
-# plt.title("lr=0.001")
-
-plt.legend()
+ax.set_xlabel("Number of Epoch", size=28)
+ax.set_ylabel("Average Loss", size=28)
+ax.set_xlim(0, 40)
+# ax.set_ylim(0, )
+plt.legend(fontsize=20)
+plt.tight_layout()
 
 plt.savefig("./images/loss.png")
 
-plt.figure()
+ax.clear()
 
-plt.plot(x, val_accu_eff, label="Eff")
-plt.plot(x, val_accu_res, label="Res")
+ax.plot(x, val_accu_eff, label="EfficientNet", lw=3)
+ax.plot(x, val_accu_res, label="ResNet", lw=3)
 
-plt.xlabel("# epoch")
-plt.ylabel("accuracy on validation dataset")
-
-plt.legend()
-
+ax.set_xlabel("Number of Epoch", size=28)
+ax.set_ylabel("Validation Accuracy", size=28)
+ax.set_xlim(0, 40)
+# ax.set_ylim(80, 97)
+plt.legend(fontsize=20)
+plt.tight_layout()
 plt.savefig("./images/accu.png")
 
 
-plt.figure()
+ax.clear()
 
-plt.plot(x, val_f1_eff, label="Eff")
-plt.plot(x, val_f1_res, label="Res")
+plt.plot(x, val_f1_eff, label="EfficientNet", lw=3)
+plt.plot(x, val_f1_res, label="ResNet", lw=3)
 
-plt.xlabel("# epoch")
-plt.ylabel("f1 score")
-
-plt.legend()
+ax.set_xlabel("Number of Epoch", size=28)
+ax.set_ylabel("F1-Score", size=28)
+ax.set_xlim(0, 40)
+ax.set_ylim(0, 1)
+plt.legend(fontsize=20)
+plt.tight_layout()
 
 plt.savefig("./images/f1score.png")
