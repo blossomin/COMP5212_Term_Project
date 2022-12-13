@@ -35,9 +35,9 @@ def epoch_time(start_time, end_time):
     return elapsed_mins, elapsed_secs
 
 
-# DEVICE = torch.device('cuda')
-DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
+DEVICE = torch.device('cpu')
+# DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print(DEVICE)
 
 VER = 'v3'
 DEBUG = False
@@ -375,7 +375,7 @@ test_loader = torch.utils.data.DataLoader(
 
 if PARAMS['backbone'] == 'resnext':
     model = ResNext(params=PARAMS, out_dim=len(LABELS_)) 
-    print(f'The resnetx50 model has {count_parameters(model):,} trainable parameters')
+    print(f'The resnet50 model has {count_parameters(model):,} trainable parameters')
 else:
     model = EffNet(params=PARAMS, out_dim=len(LABELS_)) 
     print(f'The efficient model has {count_parameters(model):,} trainable parameters')
